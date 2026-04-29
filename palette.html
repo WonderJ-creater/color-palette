@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 컬러 팔레트 생성기</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Pretendard:wght@300;400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f2ec;
+      --ink: #1a1714;
+      --mid: #7a756e;
+      --border: #ddd8d0;
+      --card: #ffffff;
+      --radius: 12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Pretendard', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 80px;
+    }
+
+    /* noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 560px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 40px;
+    }
+
+    .eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--mid);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(32px, 8vw, 52px);
+      line-height: 1.05;
+      color: var(--ink);
+    }
+
+    h1 em {
+      font-style: italic;
+      color: var(--mid);
+    }
+
+    .sub {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--mid);
+      font-weight: 300;
+      line-height: 1.6;
+    }
+
+    /* Input area */
+    .input-section {
+      margin-bottom: 32px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .word-input {
+      flex: 1;
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-family: 'Pretendard', sans-serif;
+      font-size: 16px;
+      color: var(--ink);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .word-input::placeholder { color: #bbb; }
+    .word-input:focus { border-color: var(--ink); }
+
+    .gen-btn {
+      background: var(--ink);
+      color: var(--bg);
+      border: none;
+      border-radius: var(--radius);
+      padding: 14px 22px;
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.2s, transform 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .gen-btn:hover { opacity: 0.85; }
+    .gen-btn:active { transform: scale(0.97); }
+    .gen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .shuffle-btn {
+      background: transparent;
+      color: var(--ink);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 16px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .shuffle-btn:hover { background: var(--border); border-color: var(--ink); }
+    .shuffle-btn:active { transform: scale(0.97); }
+    .shuffle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .shuffle-btn svg {
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .shuffle-btn.spinning svg {
+      transform: rotate(360deg);
+    }
+
+    /* Suggestions */
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .chip {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 5px 14px;
+      font-size: 13px;
+      color: var(--mid);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+
+    .chip:hover {
+      background: var(--ink);
+      color: var(--bg);
+      border-color: var(--ink);
+    }
+
+    /* Palette area */
+    .palette-area {
+      min-height: 200px;
+    }
+
+    /* Loading */
+    .loading {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      color: var(--mid);
+      font-size: 14px;
+      padding: 40px 0;
+      justify-content: center;
+    }
+
+    .loading.visible { display: flex; }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--ink);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Palette result */
+    .palette-result { display: none; }
+    .palette-result.visible { display: block; }
+
+    .palette-keyword {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .palette-desc {
+      font-size: 13px;
+      color: var(--mid);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    /* Color swatches */
+    .swatches {
+      display: flex;
+      border-radius: 16px;
+      overflow: hidden;
+      height: 160px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      margin-bottom: 16px;
+    }
+
+    .swatch {
+      flex: 1;
+      cursor: pointer;
+      position: relative;
+      transition: flex 0.4s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    .swatch:hover { flex: 2; }
+
+    .swatch-label {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.35);
+      color: #fff;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      padding: 3px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      backdrop-filter: blur(4px);
+    }
+
+    .swatch:hover .swatch-label { opacity: 1; }
+
+    /* Color detail list */
+    .color-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+      animation: fadeUp 0.3s ease both;
+    }
+
+    .color-row:hover { background: #f9f7f4; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .color-dot {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .color-info { flex: 1; min-width: 0; }
+
+    .color-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .color-meaning {
+      font-size: 12px;
+      color: var(--mid);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .color-hex {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--mid);
+      letter-spacing: 0.5px;
+    }
+
+    .copy-toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: var(--ink);
+      color: var(--bg);
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      padding: 8px 16px;
+      border-radius: 99px;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    .copy-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Error */
+    .error-msg {
+      display: none;
+      padding: 16px;
+      background: #fff0f0;
+      border: 1px solid #ffd0d0;
+      border-radius: var(--radius);
+      color: #c0392b;
+      font-size: 14px;
+    }
+
+    .error-msg.visible { display: block; }
+
+    /* Empty state */
+    .empty-state {
+      border: 1.5px dashed var(--border);
+      border-radius: 16px;
+      padding: 60px 24px;
+      text-align: center;
+      color: var(--mid);
+    }
+
+    .empty-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+      opacity: 0.5;
+    }
+
+    .empty-state p { font-size: 14px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="eyebrow">AI Color Studio</div>
+    <h1>컬러 <em>팔레트</em><br/>생성기</h1>
+    <p class="sub">단어나 감정, 장면을 입력하면<br/>AI가 어울리는 색상 팔레트를 만들어드립니다.</p>
+  </div>
+
+  <div class="input-section">
+    <div class="input-row">
+      <input class="word-input" id="wordInput" type="text" placeholder="예: 가을 오후, 바다, 설렘…" maxlength="60" />
+      <button class="gen-btn" id="genBtn" onclick="generate()">생성</button>
+      <button class="shuffle-btn" id="shuffleBtn" onclick="shuffle()" title="랜덤 키워드로 생성">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 3 21 3 21 8"></polyline>
+          <line x1="4" y1="20" x2="21" y2="3"></line>
+          <polyline points="21 16 21 21 16 21"></polyline>
+          <line x1="15" y1="15" x2="21" y2="21"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="suggestions">
+      <button class="chip" onclick="setWord('봄비')">🌧 봄비</button>
+      <button class="chip" onclick="setWord('새벽 도시')">🌃 새벽 도시</button>
+      <button class="chip" onclick="setWord('사막 노을')">🏜 사막 노을</button>
+      <button class="chip" onclick="setWord('숲속 아침')">🌲 숲속 아침</button>
+      <button class="chip" onclick="setWord('레트로 카페')">☕ 레트로 카페</button>
+    </div>
+  </div>
+
+  <div class="palette-area">
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <span>팔레트를 생성하는 중…</span>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="palette-result" id="paletteResult">
+      <div class="palette-keyword" id="resultKeyword"></div>
+      <div class="palette-desc" id="resultDesc"></div>
+      <div class="swatches" id="swatches"></div>
+      <div class="color-list" id="colorList"></div>
+    </div>
+
+    <div class="empty-state" id="emptyState">
+      <span class="empty-icon">🎨</span>
+      <p>위에 단어를 입력하고<br/>'생성' 버튼을 눌러보세요</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="copy-toast" id="copyToast">클립보드에 복사됨</div>
+
+<script>
+  const randomKeywords = [
+    '한여름 밤', '겨울 새벽', '벚꽃 길', '태풍 전야', '황혼 무렵',
+    '오래된 도서관', '해변 카페', '빗속 골목', '눈 덮인 산', '새벽 시장',
+    '고요한 사찰', '네온 거리', '정원의 아침', '폭풍 후 하늘', '모닥불',
+    '심해', '빈티지 영화관', '여름 축제', '안개 낀 항구', '달빛 호수'
+  ];
+
+  function shuffle() {
+    const btn = document.getElementById('shuffleBtn');
+    btn.classList.add('spinning');
+    setTimeout(() => btn.classList.remove('spinning'), 500);
+
+    const random = randomKeywords[Math.floor(Math.random() * randomKeywords.length)];
+    document.getElementById('wordInput').value = random;
+    generate();
+  }
+
+  function setWord(w) {
+    document.getElementById('wordInput').value = w;
+    document.getElementById('wordInput').focus();
+  }
+
+  function showState(state) {
+    document.getElementById('loading').classList.toggle('visible', state === 'loading');
+    document.getElementById('paletteResult').classList.toggle('visible', state === 'result');
+    document.getElementById('emptyState').style.display = state === 'empty' ? 'block' : 'none';
+    document.getElementById('errorMsg').classList.toggle('visible', state === 'error');
+  }
+
+  async function generate() {
+    const word = document.getElementById('wordInput').value.trim();
+    if (!word) { document.getElementById('wordInput').focus(); return; }
+
+    const btn = document.getElementById('genBtn');
+    btn.disabled = true;
+    document.getElementById('shuffleBtn').disabled = true;
+    showState('loading');
+
+    const prompt = `당신은 색채 디자이너입니다. 사용자가 입력한 단어나 감정, 장면을 분석해서 어울리는 컬러 팔레트를 생성하세요.
+
+입력: "${word}"
+
+아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트는 절대 포함하지 마세요.
+
+{
+  "keyword": "입력 키워드 (그대로 또는 약간 다듬어서)",
+  "description": "이 팔레트가 어떤 느낌인지 1~2문장으로 설명 (한국어)",
+  "colors": [
+    {
+      "hex": "#RRGGBB",
+      "name": "색상 이름 (한국어, 예: 안개 회색)",
+      "meaning": "이 색이 주제와 어떻게 연결되는지 짧게 (한국어)"
+    }
+  ]
+}
+
+colors는 반드시 5개. hex는 유효한 6자리 16진수 색상코드. 팔레트는 서로 조화롭고 입력 주제와 잘 어울려야 합니다.`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      const data = await res.json();
+      const raw = data.content.map(b => b.text || '').join('');
+      const clean = raw.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+
+      renderPalette(parsed);
+      showState('result');
+    } catch (e) {
+      document.getElementById('errorMsg').textContent = '팔레트 생성에 실패했습니다. 다시 시도해주세요.';
+      showState('error');
+    } finally {
+      btn.disabled = false;
+      document.getElementById('shuffleBtn').disabled = false;
+    }
+  }
+
+  function renderPalette(data) {
+    document.getElementById('resultKeyword').textContent = data.keyword;
+    document.getElementById('resultDesc').textContent = data.description;
+
+    // Swatches
+    const swatchesEl = document.getElementById('swatches');
+    swatchesEl.innerHTML = '';
+    data.colors.forEach((c, i) => {
+      const div = document.createElement('div');
+      div.className = 'swatch';
+      div.style.background = c.hex;
+      div.style.animationDelay = (i * 0.06) + 's';
+      div.innerHTML = `<div class="swatch-label">${c.hex}</div>`;
+      div.onclick = () => copyHex(c.hex);
+      swatchesEl.appendChild(div);
+    });
+
+    // Color list
+    const listEl = document.getElementById('colorList');
+    listEl.innerHTML = '';
+    data.colors.forEach((c, i) => {
+      const row = document.createElement('div');
+      row.className = 'color-row';
+      row.style.animationDelay = (i * 0.07) + 's';
+      row.innerHTML = `
+        <div class="color-dot" style="background:${c.hex}"></div>
+        <div class="color-info">
+          <div class="color-name">${c.name}</div>
+          <div class="color-meaning">${c.meaning}</div>
+        </div>
+        <div class="color-hex">${c.hex}</div>
+      `;
+      row.onclick = () => copyHex(c.hex);
+      listEl.appendChild(row);
+    });
+  }
+
+  function copyHex(hex) {
+    navigator.clipboard.writeText(hex).catch(() => {});
+    const toast = document.getElementById('copyToast');
+    toast.textContent = hex + ' 복사됨';
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1800);
+  }
+
+  document.getElementById('wordInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') generate();
+  });
+</script>
+</body>
+</html>
